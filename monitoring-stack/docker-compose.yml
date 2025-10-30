@@ -1,7 +1,7 @@
 ﻿version: '3.8'
 
 services:
-  # Наше приложение
+  # Приложение
   orders-api:
     build: ../orders-api
     container_name: orders-api
@@ -15,7 +15,7 @@ services:
       - "prometheus.io/scrape=true"
       - "prometheus.io/port=8080"
       - "prometheus.io/path=/metrics"
-  
+
   # Prometheus
   prometheus:
     image: prom/prometheus:v2.47.0
@@ -24,7 +24,7 @@ services:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
       - ./prometheus/rules.yml:/etc/prometheus/rules.yml
       - prometheus-data:/prometheus
-    command:
+    command: 
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.retention.time=7d'
       - '--web.console.libraries=/usr/share/prometheus/console_libraries'
@@ -71,42 +71,72 @@ services:
       - monitoring
     restart: unless-stopped
 
-  # Node Exporter для системных метрик
-  node-exporter:
-    image: prom/node-exporter:v1.6.1
-    container_name: node-exporter
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /:/rootfs:ro
-    command:
-      - '--path.procfs=/host/proc'
-      - '--path.sysfs=/host/sys'
-      - '--collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+|var/lib/kubelet/pods/.+)($$|/)'
-    ports:
-      - "9100:9100"
+# Симулятор пользовательских запросов
+  load-generator:
+    image: curlimages/curl:latest
+    container_name: load-generator
+    depends_on:
+      - orders-api
+    command: >
+      sh -c '
+        echo "Waiting for orders-api to be ready...";
+        until curl -sf http://orders-api:8080/health > /dev/null 2>&1; do
+          echo "Waiting...";
+          sleep 2;
+        done;
+        echo "Started load generation with random patterns";
+        
+        while true; do
+          DELAY=$$(awk -v min=0.5 -v max=5 "BEGIN{srand(); print min+rand()*(max-min)}");
+          ENDPOINT=$$(shuf -i 1-10 -n 1);
+          
+          case $$ENDPOINT in
+            1|2|3)
+              LIMIT=$$(shuf -i 5-50 -n 1);
+              echo "[$$DELAY s] GET /orders?limit=$$LIMIT";
+              curl -sf http://orders-api:8080/orders?limit=$$LIMIT || true;
+              ;;
+            4|5)
+              QUERIES="test order pending completed user product 123 abc";
+              QUERY=$$(echo $$QUERIES | tr " " "\n" | shuf -n 1);
+              echo "[$$DELAY s] GET /search?q=$$QUERY";
+              curl -sf "http://orders-api:8080/search?q=$$QUERY" || true;
+              ;;
+            6|7)
+              USER_ID=$$(shuf -i 1-100 -n 1);
+              AMOUNT=$$(awk "BEGIN{srand(); print int(rand()*1000)+10}");
+              echo "[$$DELAY s] POST /orders (user=$$USER_ID, amount=$$AMOUNT)";
+              curl -sf -X POST http://orders-api:8080/orders \
+                -H "Content-Type: application/json" \
+                -d "{\"user_id\":\"user$$USER_ID\",\"amount\":$$AMOUNT,\"status\":\"pending\"}" || true;
+              ;;
+            8)
+              ORDER_ID=$$(shuf -i 1-1000 -n 1);
+              echo "[$$DELAY s] GET /orders/$$ORDER_ID";
+              curl -sf http://orders-api:8080/orders/$$ORDER_ID || true;
+              ;;
+            9)
+              ORDER_ID=$$(shuf -i 1-100 -n 1);
+              STATUSES="pending processing completed cancelled";
+              STATUS=$$(echo $$STATUSES | tr " " "\n" | shuf -n 1);
+              echo "[$$DELAY s] PUT /orders/$$ORDER_ID (status=$$STATUS)";
+              curl -sf -X PUT http://orders-api:8080/orders/$$ORDER_ID \
+                -H "Content-Type: application/json" \
+                -d "{\"status\":\"$$STATUS\"}" || true;
+              ;;
+            10)
+              echo "[$$DELAY s] GET /health";
+              curl -sf http://orders-api:8080/health || true;
+              ;;
+          esac;
+          
+          sleep $$DELAY;
+        done
+      '
     networks:
       - monitoring
     restart: unless-stopped
 
-  # cAdvisor для метрик контейнеров
-  cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.47.0
-    container_name: cadvisor
-    privileged: true
-    devices:
-      - /dev/kmsg
-    volumes:
-      - /:/rootfs:ro
-      - /var/run:/var/run:ro
-      - /sys:/sys:ro
-      - /var/lib/docker:/var/lib/docker:ro
-      - /dev/disk/:/dev/disk:ro
-    ports:
-      - "8081:8080"
-    networks:
-      - monitoring
-    restart: unless-stopped
 
 networks:
   monitoring:

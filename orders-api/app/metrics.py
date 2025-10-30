@@ -1,4 +1,5 @@
-﻿from prometheus_client import Counter, Histogram, Gauge, Info
+﻿# se_labs_prometheus/orders-api/app/metrics.py
+from prometheus_client import Counter, Histogram, Gauge, Info
 import time
 
 # HTTP метрики

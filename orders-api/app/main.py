@@ -1,4 +1,5 @@
-﻿from fastapi import FastAPI, HTTPException, Query
+﻿# se_labs_prometheus/orders-api/app/main.py
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import Response
 from prometheus_client import Counter, Histogram, Gauge, generate_latest, REGISTRY
 import random
@@ -205,11 +206,48 @@ async def reset_chaos():
     return {"message": "Chaos settings reset"}
 
 @app.delete("/chaos/memory-leak")
-async def simulate_memory_leak():
+async def simulate_memory_leak(size_mb: int = Query(10, ge=1, le=1000)):
     """Симулировать утечку памяти"""
     # Создаём большой объект который не удаляется
     chaos.create_memory_leak()
     return {"message": "Memory leak started"}
+
+@app.post("/chaos/latency-search")
+async def set_search_latency(ms: int = Query(..., ge=0, le=5000)):
+    """Установить задержку только для /search"""
+    chaos.set_search_latency(ms / 1000)
+    return {"message": f"Search latency set to {ms}ms"}
+
+@app.get("/search")
+async def search_orders(q: str = Query("", description="Search query")):
+    """Поиск заказов"""
+    await chaos.apply_latency_search()  # ✅
+    
+    # Симуляция поиска
+    await asyncio.sleep(random.uniform(0.05, 0.15))
+    
+    results = [
+        {
+            "id": f"ORD-{random.randint(1, 9999):04d}",
+            "customer_id": f"CUST-{random.randint(1, 100):03d}",
+            "amount": round(random.uniform(10, 500), 2),
+            "status": random.choice(["pending", "completed"]),
+            "relevance": round(random.random(), 2)
+        }
+        for _ in range(random.randint(5, 20))
+    ]
+    
+    return {"query": q, "results": results, "total": len(results)}
+
+@app.get("/chaos/status")
+async def chaos_status():
+    """Получить текущие настройки chaos"""
+    return {
+        "latency_ms": chaos.latency_ms * 1000,
+        "search_latency_ms": chaos.search_latency_ms * 1000,
+        "error_rate": chaos.error_rate,
+        "memory_leak_size": len(chaos.memory_leak)
+    }
 
 # Metrics endpoint
 @app.get("/metrics")

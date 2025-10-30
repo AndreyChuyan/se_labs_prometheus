@@ -1,4 +1,5 @@
-﻿import random
+﻿# se_labs_prometheus/orders-api/app/chaos.py
+import random
 import asyncio
 from typing import Optional
 
@@ -7,9 +8,18 @@ class ChaosEngine:
     
     def __init__(self):
         self.latency_ms = 0
+        self.search_latency_ms = 0
         self.error_rate = 0.0
         self.memory_leak = []
+
+    async def apply_latency_search(self):
+        """Применить задержку только для /search"""
+        if self.search_latency_ms > 0:
+            await asyncio.sleep(self.search_latency_ms)
     
+    def set_search_latency(self, seconds: float):
+        self.search_latency_ms = seconds
+
     def set_latency(self, seconds: float):
         """Установить дополнительную задержку"""
         self.latency_ms = seconds
@@ -36,5 +46,7 @@ class ChaosEngine:
     def reset(self):
         """Сбросить все настройки"""
         self.latency_ms = 0
+        self.search_latency_ms = 0
         self.error_rate = 0.0
         self.memory_leak.clear()
+        

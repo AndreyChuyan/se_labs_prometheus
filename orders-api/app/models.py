@@ -1,4 +1,5 @@
-﻿from pydantic import BaseModel, Field
+﻿# se_labs_prometheus/orders-api/app/models.py
+from pydantic import BaseModel, Field
 from typing import Optional, List
 from enum import Enum
 
