@@ -8,6 +8,7 @@ import asyncio
 from datetime import datetime
 from typing import Optional
 import uvicorn
+import re
 
 from .metrics import (
     request_count,
@@ -26,30 +27,45 @@ from .models import Order, OrderStatus, HealthCheck
 app = FastAPI(title="Orders API", version="1.0.0")
 chaos = ChaosEngine()
 
-# Middleware для метрик
 @app.middleware("http")
 async def metrics_middleware(request, call_next):
     if request.url.path == "/metrics":
         return await call_next(request)
+
+    # Нормализуем путь до шаблона
+    path = request.url.path
     
+    # Паттерны для замены динамических частей
+    patterns = [
+        (r'^/orders/[^/]+/status$', '/orders/{order_id}/status'),
+        (r'^/orders/[^/]+$', '/orders/{order_id}'),
+        (r'^/customers/[^/]+$', '/customers/{customer_id}'),
+    ]
+    
+    endpoint = path
+    for pattern, template in patterns:
+        if re.match(pattern, path):
+            endpoint = template
+            break
+
     active_requests.inc()
-    start_time = time.time()
+    start = time.perf_counter()
     
     try:
         response = await call_next(request)
-        duration = time.time() - start_time
-        
+        dur = time.perf_counter() - start
+
         request_count.labels(
             method=request.method,
-            endpoint=request.url.path,
-            status=response.status_code
+            endpoint=endpoint,
+            status=str(response.status_code),
         ).inc()
-        
+
         request_duration.labels(
             method=request.method,
-            endpoint=request.url.path
-        ).observe(duration)
-        
+            endpoint=endpoint,
+        ).observe(dur)
+
         return response
     finally:
         active_requests.dec()
