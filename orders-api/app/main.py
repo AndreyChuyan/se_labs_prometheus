@@ -165,6 +165,9 @@ async def get_order(order_id: str):
     """Получить заказ по ID"""
     await chaos.apply_latency()
     
+    if chaos.should_fail():
+        raise HTTPException(status_code=500, detail="Database error")
+    
     if random.random() < 0.1:  # 10% вероятность не найти заказ
         raise HTTPException(status_code=404, detail="Order not found")
     
@@ -185,6 +188,9 @@ async def update_order_status(order_id: str, status: OrderStatus):
     """Обновить статус заказа"""
     await chaos.apply_latency()
     
+    if chaos.should_fail():
+        raise HTTPException(status_code=500, detail="Failed to update status")
+
     old_status = random.choice(["pending", "processing"])
     order_total.labels(status=f"{old_status}_to_{status.status}").inc()
     
@@ -239,6 +245,9 @@ async def search_orders(q: str = Query("", description="Search query")):
     """Поиск заказов"""
     await chaos.apply_latency_search()  # ✅
     
+    if chaos.should_fail():
+        raise HTTPException(status_code=500, detail="Search service unavailable")
+
     # Симуляция поиска
     await asyncio.sleep(random.uniform(0.05, 0.15))
     
