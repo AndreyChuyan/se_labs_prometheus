@@ -101,7 +101,7 @@ services:
               curl -sf "http://orders-api:8080/search?q=order$$QUERY" > /dev/null || true;
               ;;
             6|7)
-              CUST_ID=$$(shuf -i 1-100 -n 1);
+              CUST_ID=$$(shuf -i 1-30 -n 1);
               AMOUNT=$$(shuf -i 10-500 -n 1);
               echo "[$$DELAY s] POST /orders (customer=CUST-$$CUST_ID, amount=$$AMOUNT)";
               curl -sf -X POST http://orders-api:8080/orders \
@@ -109,12 +109,12 @@ services:
                 -d "{\"customer_id\":\"CUST-$$CUST_ID\",\"amount\":$$AMOUNT,\"items\":[]}" > /dev/null || true;
               ;;
             8)
-              ORDER_ID=$$(shuf -i 1-100 -n 1);
+              ORDER_ID=$$(shuf -i 1-50 -n 1);
               echo "[$$DELAY s] GET /orders/ORD-$$ORDER_ID";
               curl -sf "http://orders-api:8080/orders/ORD-$$ORDER_ID" > /dev/null || true;
               ;;
             9)
-              ORDER_ID=$$(shuf -i 1-100 -n 1);
+              ORDER_ID=$$(shuf -i 1-50 -n 1);
               STATUS=$$(shuf -n1 -e pending processing completed cancelled);
               echo "[$$DELAY s] PUT /orders/ORD-$$ORDER_ID/status ($$STATUS)";
               curl -sf -X PUT "http://orders-api:8080/orders/ORD-$$ORDER_ID/status" \
